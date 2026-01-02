@@ -90,6 +90,30 @@ fi
 
 This is not about style preference - shortcuts with `set -e` WILL break the script in subtle, hard-to-debug ways.
 
+## Container Environment
+
+### Workspace Mount
+- The `/workspace` directory inside the container is a bind mount from the host
+- Changes made inside the container are immediately visible on the host (and vice versa)
+- This allows editing files from either the host or container
+
+### Important Gotchas
+- **Image rebuilds destroy .claude directory** - `slot revoke` + `slot create` rebuilds the Docker image, which nukes the `.claude` directory including memory files and conversation history
+- **Don't store state in .claude** - Anything not managed by Claude Code or ClaudeBox will be lost on rebuild
+- **Need a "rebuild without nuke" command** - Currently no way to rebuild the image while preserving container state (installed packages, etc.)
+- **Packages installed after image build are ephemeral** - They disappear when the container exits; need image rebuild to persist
+
+### Array Safety Pattern for Bash 3.2
+When using arrays with `set -u`, empty arrays cause "unbound variable" errors. Always use:
+```bash
+# Safe expansion - works with empty arrays
+for item in ${array[@]+"${array[@]}"}; do
+    process "$item"
+done
+
+# NOT: "${array[@]}" - fails when array is empty with set -u
+```
+
 ## Common Development Commands
 
 When working on ClaudeBox, ensure Bash 3.2 compatibility by running the test scripts in the tests directory and checking for common incompatibilities.
