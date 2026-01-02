@@ -35,6 +35,7 @@ get_profile_packages() {
         datascience) echo "r-base" ;;
         security) echo "nmap tcpdump wireshark-common netcat-openbsd john hashcat hydra" ;;
         ml) echo "" ;;  # Just cmake needed, comes from build-tools now
+        claude) echo "sqlite3 tree ripgrep httpie" ;;  # Claude's preferred tools
         *) echo "" ;;
     esac
 }
@@ -62,12 +63,13 @@ get_profile_description() {
         datascience) echo "Data Science (Python, Jupyter, R)" ;;
         security) echo "Security Tools (scanners, crackers, packet tools)" ;;
         ml) echo "Machine Learning (build layer only; Python via uv)" ;;
+        claude) echo "Claude AI Agent (Python, Node.js, sqlite, ripgrep, httpie)" ;;
         *) echo "" ;;
     esac
 }
 
 get_all_profile_names() {
-    echo "core build-tools shell networking c openwrt rust python go flutter javascript java ruby php database devops web embedded datascience security ml"
+    echo "core build-tools shell networking c openwrt rust python go flutter javascript java ruby php database devops web embedded datascience security ml claude"
 }
 
 profile_exists() {
@@ -83,6 +85,7 @@ expand_profile() {
         c) echo "core build-tools c" ;;
         openwrt) echo "core build-tools openwrt" ;;
         ml) echo "core build-tools ml" ;;
+        claude) echo "core python javascript claude" ;;
         rust|go|flutter|python|php|ruby|java|database|devops|web|embedded|datascience|security|javascript)
             echo "core $1"
             ;;
@@ -130,7 +133,7 @@ read_profile_section() {
         done < <(sed -n "/^\[$section\]/,/^\[/p" "$profile_file" | tail -n +2 | grep -v '^\[')
     fi
 
-    printf '%s\n' "${result[@]}"
+    printf '%s\n' ${result[@]+"${result[@]}"}
 }
 
 update_profile_section() {
@@ -140,16 +143,19 @@ update_profile_section() {
     local new_items=("$@")
 
     local existing_items=()
-    readarray -t existing_items < <(read_profile_section "$profile_file" "$section")
+    # Use while loop instead of readarray for Bash 3.2 compatibility
+    while IFS= read -r line; do
+        [[ -n "$line" ]] && existing_items+=("$line")
+    done < <(read_profile_section "$profile_file" "$section")
 
     local all_items=()
-    for item in "${existing_items[@]}"; do
+    for item in ${existing_items[@]+"${existing_items[@]}"}; do
         [[ -n "$item" ]] && all_items+=("$item")
     done
 
-    for item in "${new_items[@]}"; do
+    for item in ${new_items[@]+"${new_items[@]}"}; do
         local found=false
-        for existing in "${all_items[@]}"; do
+        for existing in ${all_items[@]+"${all_items[@]}"}; do
             [[ "$existing" == "$item" ]] && found=true && break
         done
         [[ "$found" == "false" ]] && all_items+=("$item")
@@ -169,7 +175,7 @@ update_profile_section() {
         fi
 
         echo "[$section]"
-        for item in "${all_items[@]}"; do
+        for item in ${all_items[@]+"${all_items[@]}"}; do
             echo "$item"
         done
         echo ""
@@ -179,14 +185,14 @@ update_profile_section() {
 get_current_profiles() {
     local profiles_file="${PROJECT_PARENT_DIR:-$HOME/.claudebox/projects/$(generate_parent_folder_name "$PWD")}/profiles.ini"
     local current_profiles=()
-    
+
     if [[ -f "$profiles_file" ]]; then
         while IFS= read -r line; do
             [[ -n "$line" ]] && current_profiles+=("$line")
         done < <(read_profile_section "$profiles_file" "profiles")
     fi
-    
-    printf '%s\n' "${current_profiles[@]}"
+
+    printf '%s\n' ${current_profiles[@]+"${current_profiles[@]}"}
 }
 
 # -------- Profile installation functions for Docker builds -------------------
@@ -365,9 +371,16 @@ get_profile_ml() {
     echo "# ML profile uses build-tools for compilation"
 }
 
+get_profile_claude() {
+    local packages=$(get_profile_packages "claude")
+    if [[ -n "$packages" ]]; then
+        echo "RUN apt-get update && apt-get install -y $packages && apt-get clean"
+    fi
+}
+
 export -f _read_ini get_profile_packages get_profile_description get_all_profile_names profile_exists expand_profile
 export -f get_profile_file_path read_config_value read_profile_section update_profile_section get_current_profiles
 export -f get_profile_core get_profile_build_tools get_profile_shell get_profile_networking get_profile_c get_profile_openwrt
 export -f get_profile_rust get_profile_python get_profile_go get_profile_flutter get_profile_javascript get_profile_java get_profile_ruby
 export -f get_profile_php get_profile_database get_profile_devops get_profile_web get_profile_embedded get_profile_datascience
-export -f get_profile_security get_profile_ml
+export -f get_profile_security get_profile_ml get_profile_claude
